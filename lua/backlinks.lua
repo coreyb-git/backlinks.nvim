@@ -22,8 +22,14 @@ local function line_has_pattern(line_text, wiki_pattern, markdown_pattern)
 	return false
 end
 
-local function scan_file(scan_filename, search_filename_raw, search_filename_escaped)
-	local link_pattern_wiki = "[[" .. search_filename_raw .. "]]"
+-- File to scan, link name to scan for without extensions.
+local function scan_file(scan_filename, search_filename_core)
+	-- Lua use pattern instead of regex
+	-- http://www.lua.org/manual/5.1/manual.html#5.4.1
+	-- Escape magic characters to construct link_pattern correctly
+	local search_filename_escaped = string.gsub(search_filename_core, "([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
+
+	local link_pattern_wiki = "[[" .. search_filename_core .. "]]"
 	local link_pattern_markdown = "%[[^]]+%]%(.*" .. search_filename_escaped .. ".*%)"
 
 	local results = {}
@@ -48,10 +54,6 @@ local function find_files_back_linked(dirname)
 	local filename_original = vim.fn.expand("%:t")
 	-- Trim filename's extension(some links without extension)
 	local filename_core = string.gsub(filename_original, "%.%a+$", "")
-	-- Lua use pattern instead of regex
-	-- http://www.lua.org/manual/5.1/manual.html#5.4.1
-	-- Escape magic characters to construct link_pattern correctly
-	local filename_escaped = string.gsub(filename_core, "([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
 
 	-- Search directory
 	dirname = dirname or vim.g.backlinks_search_dir
@@ -64,7 +66,7 @@ local function find_files_back_linked(dirname)
 	local results = {}
 
 	for _, current_file in ipairs(files) do
-		local scan_results = scan_file(current_file, filename_core, filename_escaped)
+		local scan_results = scan_file(current_file, filename_core)
 
 		for _, single_result in ipairs(scan_results) do
 			table.insert(results, single_result)
@@ -73,7 +75,7 @@ local function find_files_back_linked(dirname)
 
 	-- Empty results
 	if #results == 0 then
-		vim.notify("No backlinks found for " .. filename_core .. " in " .. dirname, vim.log.levels.INFO)
+		vim.notify('No backlinks found for "' .. filename_core .. '" in ' .. dirname, vim.log.levels.INFO)
 	else
 		-- Set the location list
 		vim.fn.setloclist(0, results)
@@ -83,7 +85,7 @@ local function find_files_back_linked(dirname)
 	end
 end
 
-function M.get_backlinks(dirname)
+function M.list_backlinks(dirname)
 	return find_files_back_linked(dirname)
 end
 
