@@ -22,9 +22,9 @@ local function line_has_pattern(line_text, wiki_pattern, markdown_pattern)
 	return false
 end
 
-local function scan_file(scan_filename, search_filename_core)
-	local link_pattern_wiki = "[[" .. search_filename_core .. "]]"
-	local link_pattern_markdown = "%[[^]]+%]%(.*" .. search_filename_core .. ".*%)"
+local function scan_file(scan_filename, search_filename_raw, search_filename_escaped)
+	local link_pattern_wiki = "[[" .. search_filename_raw .. "]]"
+	local link_pattern_markdown = "%[[^]]+%]%(.*" .. search_filename_escaped .. ".*%)"
 
 	local results = {}
 
@@ -43,7 +43,7 @@ local function scan_file(scan_filename, search_filename_core)
 	return results
 end
 
-function M.get_backlinks(dirname)
+local function find_files_back_linked(dirname)
 	-- Get current filename
 	local filename_original = vim.fn.expand("%:t")
 	-- Trim filename's extension(some links without extension)
@@ -51,7 +51,7 @@ function M.get_backlinks(dirname)
 	-- Lua use pattern instead of regex
 	-- http://www.lua.org/manual/5.1/manual.html#5.4.1
 	-- Escape magic characters to construct link_pattern correctly
-	filename_core = string.gsub(filename_core, "([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
+	local filename_escaped = string.gsub(filename_core, "([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
 
 	-- Search directory
 	dirname = dirname or vim.g.backlinks_search_dir
@@ -64,7 +64,7 @@ function M.get_backlinks(dirname)
 	local results = {}
 
 	for _, current_file in ipairs(files) do
-		local scan_results = scan_file(current_file, filename_core)
+		local scan_results = scan_file(current_file, filename_core, filename_escaped)
 
 		for _, single_result in ipairs(scan_results) do
 			table.insert(results, single_result)
@@ -81,6 +81,14 @@ function M.get_backlinks(dirname)
 		-- Open the location list window
 		vim.cmd("lopen")
 	end
+end
+
+function M.get_backlinks(dirname)
+	return find_files_back_linked(dirname)
+end
+
+function M.find_files_back_linked(dirname)
+	return find_files_back_linked(dirname)
 end
 
 return M
