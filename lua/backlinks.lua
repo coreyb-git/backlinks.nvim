@@ -10,19 +10,50 @@ local function is_excluded(dirname)
 	return false
 end
 
-function M.find_files_back_linked(dirname)
-	-- Get current filename
-	local filename = vim.fn.expand("%:t")
-	-- Trim filename's extension(some links without extension)
-	filename = string.gsub(filename, "%.%a+$", "")
+local function line_has_pattern(line_text, wiki_pattern, markdown_pattern)
+	if string.find(line_text, wiki_pattern, 1, true) then
+		return true
+	end
+
+	if string.match(line_text, markdown_pattern) then
+		return true
+	end
+
+	return false
+end
+
+-- File to scan, link name to scan for without extensions.
+local function scan_file(scan_filename, search_filename_core)
 	-- Lua use pattern instead of regex
 	-- http://www.lua.org/manual/5.1/manual.html#5.4.1
 	-- Escape magic characters to construct link_pattern correctly
-	filename = string.gsub(filename, "([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
-	-- TOIMPROVE:
-	-- Currently only support plain markdown links `[..]()`, it works for me
-	-- Maybe support links like `[[]]` in the future, PRs are welcome
-	local link_pattern = "%[[^]]+%]%(.*" .. filename .. ".*%)"
+	local search_filename_escaped = string.gsub(search_filename_core, "([%.%+%-%*%?%[%]%^%$%(%)%%])", "%%%1")
+
+	local link_pattern_wiki = "[[" .. search_filename_core .. "]]"
+	local link_pattern_markdown = "%[[^]]+%]%(.*" .. search_filename_escaped .. ".*%)"
+
+	local results = {}
+
+	local lines = vim.fn.readfile(scan_filename)
+	for line_number, current_line_text in ipairs(lines) do
+		if line_has_pattern(current_line_text, link_pattern_wiki, link_pattern_markdown) then
+			results[#results + 1] = {
+				filename = scan_filename,
+				lnum = line_number,
+				col = 0,
+				text = current_line_text,
+			}
+		end
+	end
+
+	return results
+end
+
+local function find_files_back_linked(dirname)
+	-- Get current filename
+	local filename_original = vim.fn.expand("%:t")
+	-- Trim filename's extension(some links without extension)
+	local filename_core = string.gsub(filename_original, "%.%a+$", "")
 
 	-- Search directory
 	dirname = dirname or vim.g.backlinks_search_dir
@@ -34,26 +65,17 @@ function M.find_files_back_linked(dirname)
 
 	local results = {}
 
-	for _, file in ipairs(files) do
-		local lines = vim.fn.readfile(file)
+	for _, current_file in ipairs(files) do
+		local scan_results = scan_file(current_file, filename_core)
 
-		for lnum, line in ipairs(lines) do
-			if string.match(line, link_pattern) then
-				table.insert(results, {
-					filename = file,
-					lnum = lnum,
-					col = 0,
-					text = line,
-				})
-			end
+		for _, single_result in ipairs(scan_results) do
+			table.insert(results, single_result)
 		end
 	end
 
 	-- Empty results
 	if #results == 0 then
-		vim.cmd([[echohl ErrorMsg]])
-		vim.cmd([[echomsg 'No files back linked to current file found in directory ]] .. dirname .. "'")
-		vim.cmd([[echohl None]])
+		vim.notify('No backlinks found for "' .. filename_core .. '" in ' .. dirname, vim.log.levels.INFO)
 	else
 		-- Set the location list
 		vim.fn.setloclist(0, results)
@@ -61,6 +83,14 @@ function M.find_files_back_linked(dirname)
 		-- Open the location list window
 		vim.cmd("lopen")
 	end
+end
+
+function M.list_backlinks(dirname)
+	return find_files_back_linked(dirname)
+end
+
+function M.find_files_back_linked(dirname)
+	return find_files_back_linked(dirname)
 end
 
 return M
